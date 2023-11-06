@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Data0/LSAD/can_tool/src/can_tool.cpp
+iostream
+-
+fstream
+-
+stdio.h
+-
+vector
+-
+string
+-
+stdint.h
+-
+string.h
+-
+stdlib.h
+-
+
