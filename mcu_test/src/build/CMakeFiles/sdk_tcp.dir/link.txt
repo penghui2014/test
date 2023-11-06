@@ -1,0 +1,1 @@
+/usr/bin/c++     -std=c++11   CMakeFiles/sdk_tcp.dir/sdk_tcp.cpp.o  -o sdk_tcp -lpthread 

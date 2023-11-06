@@ -1,0 +1,1 @@
+/usr/bin/c++     -std=c++11   CMakeFiles/ad_test.dir/protocol.cpp.o CMakeFiles/ad_test.dir/connect_tcp.cpp.o CMakeFiles/ad_test.dir/async_message.cpp.o CMakeFiles/ad_test.dir/ad_main.cpp.o CMakeFiles/ad_test.dir/app.cpp.o  -o ad_test -lpthread 

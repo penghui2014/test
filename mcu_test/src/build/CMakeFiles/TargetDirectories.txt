@@ -1,0 +1,6 @@
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/edit_cache.dir
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/sdk_tcp.dir
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/ad_tcp.dir
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/rebuild_cache.dir
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/sdk_test.dir
+/Data0/LSAD/mcu_test/src/build/CMakeFiles/ad_test.dir
