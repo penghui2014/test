@@ -95,11 +95,12 @@ public:
         void *addr = nullptr;
         if (iter == m_funcMap.end())
         {
+			const char* dlsymError = dlerror();
             addr = dlsym(m_dllHandle, funcName.c_str());
+			dlsymError = dlerror();
             if (nullptr == addr)
             {
-                std::string s = "000 can not find this function: " + funcName;
-                std::cout << s <<  " " <<std::endl;
+                std::cout<< dlsymError<<std::endl;
                 return nullptr;
             }
             m_funcMap.insert(std::make_pair(funcName,(void*)addr));
@@ -108,21 +109,43 @@ public:
         addr = (void*)(iter->second);
         if (nullptr == addr)
         {
-            std::string s = "111 can not find this function: " + funcName;
-            std::cout << s <<  " " <<std::endl;
+            std::cout<<"can not find function: " + funcName<<std::endl;
             return nullptr;
         }
         return (T*) (addr);
     }
 
     template <typename T, typename... Args>
-    typename std::result_of<std::function<T>(Args...)>::type Invoke(const std::string& funcName, Args&&... args)
+	auto InvokeC(const std::string& funcName, Args&&... args)
+    ->typename std::result_of<std::function<T>(Args...)>::type 
     {
         auto f = GetFunction<T>(funcName);
         if (f == nullptr)
         {
             std::string s = "can not find this function: " + funcName;
             std::cout<< s << std::endl;
+			typename std::result_of<std::function<T>(Args...)>::type result;
+			return result;
+            //throw std::exception(s.c_str());
+        }
+        else
+        {
+            return f(std::forward<Args>(args)...);
+        }
+    }
+	
+	template <typename T, typename... Args>
+	auto InvokeCpp(const std::string& funcName, Args&&... args)
+    ->typename std::result_of<std::function<T>(Args...)>::type 
+    {
+		std::string cppName = MangleCpp<T>(funcName);
+        auto f = GetFunction<T>(cppName);
+        if (f == nullptr)
+        {
+            std::string s = "can not find this function: " + cppName;
+            std::cout<< s << std::endl;
+			typename std::result_of<std::function<T>(Args...)>::type result;
+			return result;
             //throw std::exception(s.c_str());
         }
         else
@@ -132,10 +155,10 @@ public:
     }
 	
 private:
-        void *m_dllHandle{nullptr};
-        std::map<std::string,void*> m_funcMap;
-        bool m_isLoad{false};
-        std::string m_dllPath;
+	void *m_dllHandle{nullptr};
+	std::map<std::string,void*> m_funcMap;
+	bool m_isLoad{false};
+	std::string m_dllPath;
 };
 
 
