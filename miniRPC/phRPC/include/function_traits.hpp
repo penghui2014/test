@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <string>
+
 
 namespace phRPC
 {
@@ -14,6 +16,11 @@ struct function_traits<Ret(Args...)>
 	using retT = Ret;
 	using pointer = Ret(*)(Args...);
 	using tupleT = std::tuple<Args...>;
+	
+	static std::string Sign(const std::string& name)
+	{
+		return name + typeid(funT).name();
+	}
 };
 
 template <typename Ret> 
@@ -23,6 +30,11 @@ struct function_traits<Ret()>
 	using retT = Ret;
 	using pointer = Ret(*)();
 	using tupleT = std::tuple<>;
+	static std::string Sign(const std::string& name)
+	{
+		std::cout<<"Sign"<<std::endl;
+		return name + typeid(funT).name();
+	}
 };
 
 template <typename Ret, typename... Args>

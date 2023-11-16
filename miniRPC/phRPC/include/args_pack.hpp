@@ -41,7 +41,7 @@ bool UnPack(std::string& str,std::string& t)
 }
 
 template<typename T>
-std::string BasePack(T& t)
+std::string BasePack(const T& t)
 {
 	std::string data = std::move(Pack(t));
 	uint16_t size = data.length();
@@ -52,7 +52,7 @@ template<typename Tuple,size_t N>
 struct PackHelper
 {
 	using next = PackHelper<Tuple,N-1>;
-	static inline std::string pack(Tuple& t)
+	static inline std::string pack(const Tuple& t)
 	{
 		return next::pack(t) + std::move(BasePack(std::get<N-1>(t)));
 	}
@@ -61,7 +61,7 @@ struct PackHelper
 template<typename Tuple>
 struct PackHelper<Tuple,1>
 {
-	static inline std::string pack(Tuple& t)
+	static inline std::string pack(const Tuple& t)
 	{
 		return std::move(BasePack(std::get<0>(t)));
 	}
@@ -70,14 +70,14 @@ struct PackHelper<Tuple,1>
 template<typename Tuple>
 struct PackHelper<Tuple,0>
 {
-	static inline std::string pack(Tuple& t)
+	static inline std::string pack(const Tuple& t)
 	{
 		return {};
 	}
 };
 
 template<typename ...Args>
-std::string PackArgs(std::tuple<Args...> tu)
+std::string PackArgs(const std::tuple<Args...>& tu)
 {
 	using tupleType = std::tuple<Args...>;
 	return PackHelper<tupleType,sizeof...(Args)>::pack(tu);

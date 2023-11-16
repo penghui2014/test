@@ -5,7 +5,6 @@
 #include "function_traits.hpp"
 #include "apply.hpp"
 #include "args_pack.hpp"
-#include "mangle.hpp"
 #include "unix_socket.hpp"
 #include "md5.hpp"
 
@@ -24,8 +23,8 @@ class RPCServer
 		template<typename Fun>
 		void Register(Fun f,const std::string& name)
 		{
-			std::string allname = MangleFunction<typename function_traits<Fun>::funT>(name);
-			uint32_t key = MD5Hash32(name.data());
+			std::string allname = function_traits<Fun>::Sign(name);
+			uint32_t key = MD5Hash32(allname.data());
 			m_map[key] = std::bind(&Apply<Fun>, f, std::placeholders::_1, std::placeholders::_2);
 			std::cout<<allname<< " key:"<<key<<std::endl;
 		}
@@ -43,7 +42,7 @@ class RPCServer
 		
 		template<typename Fun,typename T>
 		typename std::enable_if<std::is_void<typename function_traits<Fun>::retT>::value>::type
-		static call(Fun& f,T& t,std::string& result)
+		static CallHelp(Fun& f,T& t,std::string& result)
 		{
 			apply(f,t);
 			result.clear();
@@ -51,7 +50,7 @@ class RPCServer
 
 		template<typename Fun,typename T>
 		typename std::enable_if<!std::is_void<typename function_traits<Fun>::retT>::value>::type
-		static call(Fun& f,T& t, std::string& result)
+		static CallHelp(Fun& f,T& t, std::string& result)
 		{
 			auto ret = apply(f,t);
 			result = std::move(BasePack(ret));
@@ -65,7 +64,7 @@ class RPCServer
 			tup t;
 			if(UnPackArgs(args,t))
 			{
-				call(f,t, result);
+				CallHelp(f,t, result);
 				return RPC_SUCCESS;
 			}
 			
@@ -77,5 +76,9 @@ class RPCServer
 		std::unique_ptr<USocketServer> m_transport;
 		std::string m_name;
 };
+
+
+#define EXPORT_RPC(server,fun)\
+server.Register(fun,#fun);
 
 }
