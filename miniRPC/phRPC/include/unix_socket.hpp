@@ -18,72 +18,50 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include "transport.hpp"
 #include "debug.hpp"
 
 namespace phRPC
 {
 	
-enum RPC_ERR
-{
-	RPC_SUCCESS = 0,
-	RPC_CONNECT_ERR = -2,
-	RPC_TIMEOUT = -3,
-	RPC_NO_FUNCTION = -4,
-	RPC_INVALID_ARGS = -5,
-	RPC_INVALID_RETURN = -6,
-};
+
 
 enum MSG_e
 {
 	MSG_INVALID,
-	MSG_TEST,
 	MSG_REQUEST,
 	MSG_RESPONSE,
 };
 	
 struct Header
 {
-	uint64_t seq;
-	uint32_t msg;
-	uint32_t key;
-	int		 err;
-	
+	uint64_t seq{0};
+	uint32_t msg{MSG_INVALID};
 	Header(){}
-	
-	Header(uint64_t s,uint32_t m,uint32_t k)
-	:seq(s),msg(m),key(k),err(0)
-	{
-	}
+	Header(uint64_t s,uint32_t m):seq(s),msg(m){}
 };
 
 
-class USocketServer
+class USocketServer:public TransServer
 {
-	public:
-		using callback = std::function<int(uint32_t key, std::string& args, std::string& result)>;
-		
 	private:
 		bool m_OK{false};
 		int m_sockFd{-1};
 		std::string m_path;
 		std::thread m_thread;
 		std::mutex m_sockMutex;
-		callback m_callback;
-		
+
 	public:
 		USocketServer(const std::string& name);
 		~USocketServer();
-		void SetCallback(callback cb){m_callback = cb;}
 		
 	private:
 		void ServerThread();
 		bool Init();
-		void Exit();
-		 
-		
+		void Exit();		
 };
 
-class USocketClient
+class USocketClient:public TransClient
 {
 	private:
 		int m_sockFd{-1};
@@ -92,13 +70,15 @@ class USocketClient
 		std::mutex m_sockMutex;
 		std::atomic<uint64_t> m_sendSeq{0};
 		std::unique_ptr<char> m_buffer;
+	
+	private:
+		bool Init();
 		
 	public:
 		USocketClient(const std::string& name);
 		~USocketClient();
-		//0:success -1:timeout -2:connect failed
-		int Request(uint32_t key,const std::string& args, uint32_t timeout ,std::string& result,int& err);
-		bool Init();
+		int Request(const std::string& request, std::string& response, uint32_t timeout) override;
+		
 };
 
 
@@ -241,17 +221,12 @@ static inline int Recive(int sockFd, Header& header, char* recvBuf, int bufLen,i
 	struct msghdr msg;
 	memset(&msg,0,sizeof(struct msghdr));
 	struct iovec iov[2];
-	//Control_u control_un;
 
 	char control[CMSG_SPACE(sizeof(int))];
 	
     TSockAddrUn unadr;
 	bzero(&unadr,sizeof(unadr));
-	
-	//unadr.sun_family = AF_LOCAL;
-	//strcpy(unadr.sun_path, UNIX_SOCKET_PATH);
-	
-	
+
 	msg.msg_name = (TSockAddr *)&unadr;
 	msg.msg_namelen = socklen;
 	iov[0].iov_base = &header;
@@ -281,6 +256,7 @@ static inline int Recive(int sockFd, Header& header, char* recvBuf, int bufLen,i
 }
 
 USocketServer::USocketServer(const std::string& name)
+	:TransServer(name)
 {
 	m_path = "/tmp/" + name;
 	m_OK = true;
@@ -326,17 +302,23 @@ void USocketServer::ServerThread()
 		Header header;
 		std::string sender;
 
-		ret = Recive(m_sockFd, header , buffer, BUFFER_SIZE , 20, sender);
+		ret = Recive(m_sockFd, header, buffer, BUFFER_SIZE, 20, sender);
 		if(ret >= headersize)
 		{
-			std::string args(buffer, ret - headersize);
-			std::string result;
+			if(header.msg != MSG_REQUEST)
+			{
+				DEBUG_E("msg type error:%d",header.msg);
+				continue;
+			}
+			
+			std::string request(buffer, ret - headersize);
+			std::string response;
 			if(m_callback)
 			{
-				header.err = m_callback(header.key, args, result);
+				m_callback(request, response);
 			}
 			header.msg = MSG_RESPONSE;
-			ret = Send(m_sockFd, sender, header, result);
+			ret = Send(m_sockFd, sender, header, response);
 			
 			if(ret < 0)
 			{
@@ -358,7 +340,8 @@ void USocketServer::ServerThread()
 
 
 
-USocketClient::USocketClient(const std::string& name)
+USocketClient::USocketClient(const std::string& name):
+	TransClient(name)
 {
 	m_path = CreateTmpPath();
 	m_serverPath = "/tmp/" + name;
@@ -381,7 +364,7 @@ bool USocketClient::Init()
 	return (m_sockFd >= 0);
 }
 
-int USocketClient::Request(uint32_t key,const std::string& args, uint32_t timeout ,std::string& result,int& err)
+int USocketClient::Request(const std::string& request, std::string& response, uint32_t timeout)
 {
 	static const uint32_t BUFFER_SIZE = 1024*30;
 	static const int headersize = (int)sizeof(Header);
@@ -399,16 +382,15 @@ int USocketClient::Request(uint32_t key,const std::string& args, uint32_t timeou
 
 	uint64_t seq = m_sendSeq.fetch_add(1);
 	
-	Header header(seq,MSG_REQUEST,key);
-	int ret = Send(m_sockFd, m_serverPath, header, args);
-	if(headersize + args.length() == ret)
+	Header header(seq,MSG_REQUEST);
+	int ret = Send(m_sockFd, m_serverPath, header, request);
+	if(headersize + request.length() == ret)
 	{
 		std::string sender;
 		ret = Recive(m_sockFd, header, m_buffer.get() , BUFFER_SIZE, timeout, sender);
 		if(headersize <= ret && m_serverPath == sender && MSG_RESPONSE == header.msg && seq == header.seq)
 		{
-			result = std::string(m_buffer.get(), ret - headersize);
-			err = header.err;
+			response = std::move(std::string(m_buffer.get(), ret - headersize));
 			return 0;
 		}
 		else if(0 == ret)

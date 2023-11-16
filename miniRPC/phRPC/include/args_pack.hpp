@@ -5,10 +5,13 @@
 #include <string>
 #include <type_traits>
 #include <cxxabi.h>
+#include "debug.hpp"
 
 namespace phRPC
 {
-	
+
+#define DEMANGLE_NAME(t) abi::__cxa_demangle(typeid(t).name(),NULL,NULL,NULL) 
+
 template<typename T>
 std::string Pack(const T& t)
 {
@@ -25,9 +28,7 @@ bool UnPack(std::string& str, T& t)
 {
 	if(str.length() != sizeof(T))
 	{
-		std::cout<<"length error 1 for:" << 
-			abi::__cxa_demangle(typeid(t).name(),NULL,NULL,NULL) 
-			<<" len:"<<str.length()<< std::endl;
+		DEBUG_E("length error for:%s len:%d\n",DEMANGLE_NAME(t), (int)str.length());
 		return false;
 	}
 	t = *((T*)str.c_str());
@@ -88,13 +89,13 @@ bool BaseUnPack(std::string& str,T& t)
 {
 	if(str.length() < 2)
 	{
-		std::cout<<"format error\n";
+		DEBUG_E("format error for:%s len:%d",DEMANGLE_NAME(t), (int)str.length());
 		return false;
 	}
 	uint16_t size = *((uint16_t*)str.substr(0,2).c_str());
 	if(str.length() < (2 + size))
 	{
-		std::cout<<"length error1\n";
+		DEBUG_E("format error for:%s len:%d size:%d",DEMANGLE_NAME(t), (int)str.length(),size);
 		return false;
 	}
 	std::string data = str.substr(2,size);

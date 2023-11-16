@@ -7,11 +7,10 @@
 #include "args_pack.hpp"
 #include "unix_socket.hpp"
 #include "md5.hpp"
+#include "rpc_err.hpp"
 
 namespace phRPC
 {
-
-extern __thread int rpc_err;	
 	
 class RPCClient
 {
@@ -26,47 +25,13 @@ class RPCClient
 	public:
 		template <typename Fun, uint32_t TIMEOUT = 40, typename... Args>
 		typename std::enable_if<!std::is_void<typename function_traits<Fun>::retT>::value, typename function_traits<Fun>::retT>::type
-		Call(const std::string& name, Args&&... args)
-		{
-			using retT = typename function_traits<Fun>::retT;
-			retT t;
-			std::string result;
-			
-			int ret = CallHelper<Fun,TIMEOUT,Args...>(result, name, std::forward<Args>(args)...);
-			if(ret == 0)
-			{
-				if(!BaseUnPack(result, t))
-				{
-					rpc_err = RPC_INVALID_RETURN;
-				}
-			}			
-			return t;	
-		}
-		
-		template <typename Fun, uint32_t TIMEOUT = 40,typename... Args>
-		typename std::enable_if<std::is_void<typename function_traits<Fun>::retT>::value>::type
-		Call(const std::string& name, Args&&... args)
-		{
-			std::string result;
-			int ret = CallHelper<Fun,TIMEOUT,Args...>(result, name, std::forward<Args>(args)...);
-			if(ret == 0)
-			{
-				if(0 != result.length())
-				{
-					rpc_err = RPC_INVALID_RETURN;
-				}
-			}
-		}
-		
-		template <typename Fun, uint32_t TIMEOUT = 40, typename... Args>
-		typename std::enable_if<!std::is_void<typename function_traits<Fun>::retT>::value, typename function_traits<Fun>::retT>::type
 		Call(uint32_t key, Args&&... args)
 		{
 			using retT = typename function_traits<Fun>::retT;
 			retT t;
 			std::string result;
 			
-			int ret = CallHelper<Fun,TIMEOUT,Args...>(result, key, std::forward<Args>(args)...);
+			int ret = CallHelper<Fun,TIMEOUT,Args...>(key, result, std::forward<Args>(args)...);
 			if(ret == 0)
 			{
 				if(!BaseUnPack(result, t))
@@ -82,7 +47,7 @@ class RPCClient
 		Call(uint32_t key, Args&&... args)
 		{
 			std::string result;
-			int ret = CallHelper<Fun,TIMEOUT,Args...>(result, key, std::forward<Args>(args)...);
+			int ret = CallHelper<Fun,TIMEOUT,Args...>(key, result, std::forward<Args>(args)...);
 			if(ret == 0)
 			{
 				if(0 != result.length())
@@ -92,30 +57,30 @@ class RPCClient
 			}
 		}
 		
-	private:
+	private:		
 		template<typename Fun,uint32_t TIMEOUT = 40,typename ...Args>
-		inline int CallHelper(std::string& result, const std::string& name, Args&&... args)
-		{
-			using funT = typename function_traits<Fun>::funT;
-			std::string allname = function_traits<Fun>::Sign(name);
-			uint32_t key = MD5Hash32(allname.data());
-			return CallHelper<Fun, TIMEOUT, Args...>(result, key, std::forward<Args>(args)...);
-		}
-		
-		template<typename Fun,uint32_t TIMEOUT = 40,typename ...Args>
-		inline int CallHelper(std::string& result,uint32_t key, Args&&... args)
+		inline int CallHelper(uint32_t key, std::string& result, Args&&... args)
 		{
 			using tup = typename function_traits<Fun>::tupleT;
 			tup tt = std::forward_as_tuple(std::forward<Args>(args)...);
 
 			std::string strArgs = PackArgs(tt);
-			int err = RPC_SUCCESS;
-			
-			int status = m_socket->Request(key, strArgs, TIMEOUT , result, err);
-			ChangeErr(status,err);
-			if(0 == status && RPC_SUCCESS == err)
+			std::string request = BasePack(key) + strArgs;
+
+			rpc_err = RPC_CONNECT_ERR;
+			int status = m_socket->Request(request, result, TIMEOUT);
+			if(status == 0)
 			{
+				BaseUnPack(result,rpc_err);
 				return 0;
+			}
+			else if(-1 == status)
+			{
+				rpc_err = RPC_TIMEOUT;
+			}
+			else
+			{
+				rpc_err = RPC_CONNECT_ERR;
 			}
 			
 			return -1;
@@ -147,8 +112,6 @@ class RPCClient
 
 };
 
-#define CREATE_RPC_ERR() __thread int phRPC::rpc_err = 0;
-	
 
 #define IMPORT_RPC(client,fun) \
 using type_##fun = decltype(fun); \

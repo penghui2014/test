@@ -7,6 +7,7 @@
 #include "args_pack.hpp"
 #include "unix_socket.hpp"
 #include "md5.hpp"
+#include "rpc_err.hpp"
 
 namespace phRPC
 {
@@ -17,7 +18,7 @@ class RPCServer
 		RPCServer(const std::string& name):m_name(name)
 		{
 			m_transport.reset(new USocketServer(m_name));
-			m_transport->SetCallback(std::bind(&RPCServer::Call, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+			m_transport->SetCallback(std::bind(&RPCServer::CallRecive, this, std::placeholders::_1, std::placeholders::_2));
 		}
 	
 		template<typename Fun>
@@ -26,11 +27,25 @@ class RPCServer
 			std::string allname = function_traits<Fun>::Sign(name);
 			uint32_t key = MD5Hash32(allname.data());
 			m_map[key] = std::bind(&Apply<Fun>, f, std::placeholders::_1, std::placeholders::_2);
-			std::cout<<allname<< " key:"<<key<<std::endl;
 		}
 		
 
 	private:
+		void CallRecive(std::string& request, std::string& response)
+		{
+			uint32_t key = 0;
+			int ret = 0;
+			if(BaseUnPack(request,key))
+			{
+				ret = Call(key,request,response);
+			}
+			else
+			{
+				ret = RPC_INVALID_ARGS;
+			}
+			response = std::move(BasePack(ret) + response);
+		}
+		
 		int Call(uint32_t key, std::string& args, std::string& result)
 		{
 			if(m_map.count(key))
