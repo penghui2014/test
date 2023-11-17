@@ -54,6 +54,7 @@ int main()
 	EXPORT_RPC(server, add1);
 	EXPORT_RPC(server, add);
 	EXPORT_RPC(server, test2);
+	//EXPORT_RPC(server, SetCallback);
 	
 	while(1)
 		sleep(1);

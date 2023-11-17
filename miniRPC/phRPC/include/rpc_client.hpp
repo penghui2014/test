@@ -17,7 +17,7 @@ class RPCClient
 	public:
 		RPCClient(const std::string& name):m_name(name)
 		{
-			m_socket.reset(new USocketClient(m_name));
+			m_tclient.reset(new USocketClient(m_name));
 		}
 		
 		~RPCClient() = default;
@@ -34,7 +34,7 @@ class RPCClient
 			int ret = CallHelper<Fun,TIMEOUT,Args...>(key, result, std::forward<Args>(args)...);
 			if(ret == 0)
 			{
-				if(!BaseUnPack(result, t))
+				if(!UnPack(result, t))
 				{
 					rpc_err = RPC_INVALID_RETURN;
 				}
@@ -64,15 +64,15 @@ class RPCClient
 			using tup = typename function_traits<Fun>::tupleT;
 			tup tt = std::forward_as_tuple(std::forward<Args>(args)...);
 
-			std::string strArgs = PackArgs(tt);
-			std::string request = BasePack(key) + strArgs;
+			std::string strArgs = Pack(tt);
+			std::string request = Pack(key) + strArgs;
 
-			rpc_err = RPC_CONNECT_ERR;
-			int status = m_socket->Request(request, result, TIMEOUT);
+			int status = m_tclient->Request(request, result, TIMEOUT);
 			if(status == 0)
 			{
-				BaseUnPack(result,rpc_err);
-				return 0;
+				rpc_err = RPC_INVALID_DATA;
+				UnPack(result, rpc_err);
+				return (RPC_SUCCESS == rpc_err) ? 0 : -1;
 			}
 			else if(-1 == status)
 			{
@@ -86,29 +86,9 @@ class RPCClient
 			return -1;
 		}
 		
-		static inline void ChangeErr(int status,int err)
-		{
-			if(0 == status)
-			{
-				rpc_err = RPC_SUCCESS;
-				if(RPC_SUCCESS != err)
-				{
-					rpc_err = err;
-				}
-			}
-			else if(-1 == status)
-			{
-				rpc_err = RPC_TIMEOUT;
-			}
-			else if(-2 == status)
-			{
-				rpc_err = RPC_CONNECT_ERR;
-			}
-		}
-		
 	private:
 		std::string m_name;
-		std::unique_ptr<USocketClient> m_socket;
+		std::unique_ptr<TransClient> m_tclient;
 
 };
 

@@ -11,7 +11,7 @@
 
 namespace phRPC
 {
-	
+
 class RPCServer
 {
 	public:
@@ -27,23 +27,23 @@ class RPCServer
 			std::string allname = function_traits<Fun>::Sign(name);
 			uint32_t key = MD5Hash32(allname.data());
 			m_map[key] = std::bind(&Apply<Fun>, f, std::placeholders::_1, std::placeholders::_2);
+			DEBUG_E("name:%s key:%u",name.c_str(), key);
 		}
-		
 
 	private:
 		void CallRecive(std::string& request, std::string& response)
 		{
 			uint32_t key = 0;
 			int ret = 0;
-			if(BaseUnPack(request,key))
+			if(UnPack(request,key))
 			{
 				ret = Call(key,request,response);
 			}
 			else
 			{
-				ret = RPC_INVALID_ARGS;
+				ret = RPC_INVALID_DATA;
 			}
-			response = std::move(BasePack(ret) + response);
+			response = std::move(Pack(ret) + response);
 		}
 		
 		int Call(uint32_t key, std::string& args, std::string& result)
@@ -52,6 +52,7 @@ class RPCServer
 			{
 				return m_map[key](args, result);
 			}
+			DEBUG_E("do not find key:%u",key);
 			return RPC_NO_FUNCTION;
 		}
 		
@@ -68,7 +69,7 @@ class RPCServer
 		static CallHelp(Fun& f,T& t, std::string& result)
 		{
 			auto ret = apply(f,t);
-			result = std::move(BasePack(ret));
+			result = std::move(Pack(ret));
 		}
 
 		template<typename Fun>
@@ -77,10 +78,14 @@ class RPCServer
 			using tup = typename function_traits<Fun>::tupleT;
 			
 			tup t;
-			if(UnPackArgs(args,t))
+			if(UnPack(args,t))
 			{
 				CallHelp(f,t, result);
 				return RPC_SUCCESS;
+			}
+			else
+			{
+				DEBUG_E("unpack args error");
 			}
 			
 			return RPC_INVALID_ARGS;
@@ -88,7 +93,7 @@ class RPCServer
 
 	private:
 		std::unordered_map<uint32_t, std::function<int(std::string&,std::string&)>> m_map;
-		std::unique_ptr<USocketServer> m_transport;
+		std::unique_ptr<TransServer> m_transport;
 		std::string m_name;
 };
 

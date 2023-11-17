@@ -28,7 +28,7 @@ void test0(int a,long b);
 
 int add(int a,int b);
 
-string add1(string a, string b);
+string add1(string a,string b);
 
 string test1();
 
@@ -59,7 +59,7 @@ void test(int i)
 			string arg1 = "fuck ";
 			string arg2 = "this world";
 			string ret = add1<>(arg1,arg2);
-			cout<<"add1:"<<ret<<endl;
+			cout<<"add1:"<<ret << "rpc_err:"<<  rpc_err << endl;
 		}
 		if(i == 3)
 		{
@@ -79,9 +79,10 @@ void test(int i)
 int main()
 {
 	thread t[5];
+	t[2] = thread(test,2);
 	for(int i = 0;i < 4; i++)
 	{
-		t[i] = thread(test,i);
+		//t[i] = thread(test,i);
 	}
 	
 	

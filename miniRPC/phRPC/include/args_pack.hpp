@@ -10,43 +10,30 @@
 namespace phRPC
 {
 
+
+/* 
+* the pack format:2bytes data0 2bytes data1 2bytes data2 ....
+*  2bytes means length of next data
+*/
 #define DEMANGLE_NAME(t) abi::__cxa_demangle(typeid(t).name(),NULL,NULL,NULL) 
+
+template<typename T>
+std::string PackBase(const T& t)
+{
+	return (std::string((char*)&t,sizeof(T)));
+}
+
+std::string PackBase(const std::string& t)
+{
+	return (std::string(t));
+}
 
 template<typename T>
 std::string Pack(const T& t)
 {
-	return std::move(std::string((char*)&t,sizeof(T)));
-}
-
-std::string Pack(const std::string& t)
-{
-	return std::move(std::string(t));
-}
-
-template<typename T>
-bool UnPack(std::string& str, T& t)
-{
-	if(str.length() != sizeof(T))
-	{
-		DEBUG_E("length error for:%s len:%d\n",DEMANGLE_NAME(t), (int)str.length());
-		return false;
-	}
-	t = *((T*)str.c_str());
-	return true;
-}
-
-bool UnPack(std::string& str,std::string& t)
-{
-	t = str;
-	return true;
-}
-
-template<typename T>
-std::string BasePack(const T& t)
-{
-	std::string data = std::move(Pack(t));
+	std::string data = std::move(PackBase(t));
 	uint16_t size = data.length();
-	return std::move(Pack(size) + data);
+	return (PackBase(size) + data);
 }
 
 template<typename Tuple,size_t N>
@@ -55,7 +42,7 @@ struct PackHelper
 	using next = PackHelper<Tuple,N-1>;
 	static inline std::string pack(const Tuple& t)
 	{
-		return next::pack(t) + std::move(BasePack(std::get<N-1>(t)));
+		return next::pack(t) + std::move(Pack(std::get<N-1>(t)));
 	}
 };
 
@@ -64,7 +51,7 @@ struct PackHelper<Tuple,1>
 {
 	static inline std::string pack(const Tuple& t)
 	{
-		return std::move(BasePack(std::get<0>(t)));
+		return (Pack(std::get<0>(t)));
 	}
 };
 
@@ -78,30 +65,48 @@ struct PackHelper<Tuple,0>
 };
 
 template<typename ...Args>
-std::string PackArgs(const std::tuple<Args...>& tu)
+std::string Pack(const std::tuple<Args...>& tu)
 {
 	using tupleType = std::tuple<Args...>;
 	return PackHelper<tupleType,sizeof...(Args)>::pack(tu);
 }
 
 template<typename T>
-bool BaseUnPack(std::string& str,T& t)
+bool UnPackBase(const std::string& str, T& t)
 {
-	if(str.length() < 2)
+	if(str.length() != sizeof(T))
+	{
+		DEBUG_E("length error for:%s len:%d\n",DEMANGLE_NAME(t), (int)str.length());
+		return false;
+	}
+	t = *((T*)str.data());
+	return true;
+}
+
+bool UnPackBase(const std::string& str,std::string& t)
+{
+	t = str;
+	return true;
+}
+
+template<typename T>
+bool UnPack(std::string& str,T& t)
+{
+	uint16_t size;
+	try
+	{
+		if(UnPackBase(str.substr(0,2),size) && UnPackBase(str.substr(2,size),t))
+		{
+			str = str.substr(2+size);
+			return true;
+		}
+	}
+	catch (...)
 	{
 		DEBUG_E("format error for:%s len:%d",DEMANGLE_NAME(t), (int)str.length());
-		return false;
 	}
-	uint16_t size = *((uint16_t*)str.substr(0,2).c_str());
-	if(str.length() < (2 + size))
-	{
-		DEBUG_E("format error for:%s len:%d size:%d",DEMANGLE_NAME(t), (int)str.length(),size);
-		return false;
-	}
-	std::string data = str.substr(2,size);
-	bool ret = UnPack(data,t);
-	str = str.substr(2+size);
-	return ret;
+	return false;
+	
 }
 
 template<typename Tuple,size_t N>
@@ -112,7 +117,7 @@ struct UnPackHelper
 	{
 		if(next::unpack(str,t))
 		{
-			return BaseUnPack(str, std::get<N-1>(t));
+			return UnPack(str, std::get<N-1>(t));
 		}
 		else
 		{
@@ -126,7 +131,7 @@ struct UnPackHelper<Tuple,1>
 {
 	static inline bool unpack(std::string& str,Tuple& t)
 	{
-		return BaseUnPack(str, std::get<0>(t));
+		return UnPack(str, std::get<0>(t));
 	}
 };
 
@@ -141,7 +146,7 @@ struct UnPackHelper<Tuple,0>
 
 
 template<typename ...Args>
-bool UnPackArgs(std::string& str,std::tuple<Args...>& tu)
+bool UnPack(std::string& str,std::tuple<Args...>& tu)
 {
 	using tupleType = std::tuple<Args...>;
 	return UnPackHelper<tupleType,sizeof...(Args)>::unpack(str,tu);

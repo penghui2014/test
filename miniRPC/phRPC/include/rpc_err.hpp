@@ -12,6 +12,7 @@ enum RPC_ERR
 	RPC_NO_FUNCTION = -4,
 	RPC_INVALID_ARGS = -5,
 	RPC_INVALID_RETURN = -6,
+	RPC_INVALID_DATA = -7,
 };
 
 extern __thread int rpc_err;

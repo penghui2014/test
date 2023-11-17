@@ -102,7 +102,7 @@ static inline int Open(const char* path)
 
 	unadr.sun_family = AF_LOCAL;
 	strcpy(unadr.sun_path, path);
-
+		
 	/* 创建本地socket */
 	int sockFd = socket(AF_LOCAL, SOCK_DGRAM, 0);//数据包方式
 	if ( sockFd <= 0)
@@ -127,7 +127,38 @@ static inline int Open(const char* path)
 	return sockFd;
 }
 
-		
+static inline int Connect(const char* path)
+{
+	TSockAddrUn unadr;
+	bzero(&unadr,sizeof(unadr));
+
+	unadr.sun_family = AF_LOCAL;
+	strcpy(unadr.sun_path, path);
+	
+	unlink(path);
+	
+	/* 创建本地socket */
+	int sockFd = socket(AF_LOCAL, SOCK_DGRAM, 0);//数据包方式
+	if ( sockFd <= 0)
+	{
+		DEBUG_E("create unix socket:%s fd:%d failed:%s\n",path,sockFd,strerror(errno));
+	    return -1;
+	}
+	//禁止子进程继承fd
+	fcntl(sockFd, F_SETFD, FD_CLOEXEC);
+	
+	if(connect(sockFd,(struct sockaddr *)&unadr, sizeof(unadr)) < 0)
+	{
+		DEBUG_E("connect %s error:%s",path,strerror(errno));
+		close(sockFd);
+		return -1;
+	}
+
+	DEBUG_E("connect %s successed",path);
+	
+	return sockFd;
+}
+
 static inline int WaitReadTimeout(int fd, int millsec)
 {
 	fd_set rset;
@@ -359,6 +390,7 @@ bool USocketClient::Init()
 	if(m_sockFd < 0)
 	{
 		m_sockFd = Open(m_path.c_str());
+		//m_sockFd = Connect(m_serverPath.c_str());
 	}
 	
 	return (m_sockFd >= 0);
